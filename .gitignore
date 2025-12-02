@@ -1,8 +1,40 @@
-config.py
-data/
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# Environment variables
 .env
-.venv/
-.idea/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
 users.db
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
