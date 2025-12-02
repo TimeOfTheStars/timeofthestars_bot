@@ -178,7 +178,7 @@ class APIService:
             time_formatted = time_str
         
         message = (
-            f"🏒 <b>Предстоящий матч</b>\n\n"
+            # f"🏒 <b>Предстоящий матч</b>\n\n"
             f"🏟 <b>{team_a_name}</b> vs <b>{team_b_name}</b>\n\n"
             f"📅 Дата: {date_formatted}\n"
             f"⏰ Время: {time_formatted}\n"
@@ -186,7 +186,9 @@ class APIService:
         )
         
         if game.get('video_url'):
-            message += f"\n🎥 <a href='{game['video_url']}'>Ссылка на трансляцию</a>"
+            message += f"\n🎥 <a href='{game['video_url']}'>Ссылка на трансляцию</a>\n"
+
+        message += f"\n📊 <a href='https://timeofthestars.ru/zvezdaOtechestva?tab=table'>Турнирная таблица</a> | <a href='https://timeofthestars.ru/zvezdaOtechestva?tab=bestPlayers'>Лучшие игроки</a>"
         
         return message
 

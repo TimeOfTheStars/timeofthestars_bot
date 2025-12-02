@@ -3,10 +3,10 @@ pyTelegramBotAPI
 python-dotenv
 
 # База данных
-SQLAlchemy
+SQLAlchemy==2.0.35
 
 # Админ-панель
-sqladmin
+sqladmin==0.16.1
 starlette
 uvicorn
 

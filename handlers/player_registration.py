@@ -377,7 +377,7 @@ def register_player_handlers(bot: TeleBot):
                     f"Позиция: {position_text}\n"
                     f"Телефон: {state.get('phone', 'не указан')}"
                     f"{team_text}\n\n"
-                    "Ваша анкета доступна администраторам в админ-панели.",
+                    "Ваша анкета отправлена администраторам.",
                     reply_markup=get_player_management_menu()
                 )
             except Exception as e:
