@@ -10,6 +10,7 @@ from handlers import (
     register_team_handlers,
     register_player_handlers
 )
+from utils.scheduler import NotificationScheduler
 
 
 def create_bot():
@@ -49,6 +50,11 @@ def main():
     print("\n🤖 Создание бота...")
     bot = create_bot()
     
+    # Запуск планировщика уведомлений
+    print("\n⏰ Запуск планировщика уведомлений...")
+    scheduler = NotificationScheduler(bot)
+    scheduler.start()
+    
     print("\n✅ Бот успешно запущен!")
     print("📱 Нажмите Ctrl+C для остановки\n")
     print("=" * 50)
@@ -58,9 +64,11 @@ def main():
         bot.infinity_polling(timeout=10, long_polling_timeout=5)
     except KeyboardInterrupt:
         print("\n\n⛔ Остановка бота...")
+        scheduler.stop()
         print("👋 До свидания!")
     except Exception as e:
         print(f"\n❌ Ошибка при работе бота: {e}")
+        scheduler.stop()
         raise
 
 

@@ -5,6 +5,7 @@ import requests
 from typing import List, Dict, Optional
 from config import config
 from datetime import datetime
+import pytz
 
 
 class APIService:
@@ -118,13 +119,20 @@ class APIService:
         """
         games = self.get_games(force_refresh=True)
         upcoming = []
-        today = datetime.now().date()
+        
+        # Используем московское время
+        moscow_tz = pytz.timezone('Europe/Moscow')
+        now = datetime.now(moscow_tz)
         
         for game in games:
             try:
-                game_date = datetime.strptime(game['date'], '%Y-%m-%d').date()
+                # Парсим дату и время игры
+                game_datetime_str = f"{game['date']} {game['time']}"
+                game_datetime = datetime.strptime(game_datetime_str, '%Y-%m-%d %H:%M:%S')
+                game_datetime = moscow_tz.localize(game_datetime)
                 
-                if game_date >= today:
+                # Проверяем, что игра ещё не прошла
+                if game_datetime > now:
                     # Добавляем информацию о командах
                     team_a = self.get_team_by_id(game['team_a_id'])
                     team_b = self.get_team_by_id(game['team_b_id'])
@@ -132,14 +140,15 @@ class APIService:
                     game_info = game.copy()
                     game_info['team_a'] = team_a
                     game_info['team_b'] = team_b
+                    game_info['datetime'] = game_datetime  # Добавляем полный datetime для сортировки
                     
                     upcoming.append(game_info)
             except Exception as e:
                 print(f"⚠️ Ошибка при обработке игры {game.get('id')}: {e}")
                 continue
         
-        # Сортировка по дате
-        upcoming.sort(key=lambda x: (x['date'], x['time']))
+        # Сортировка по datetime
+        upcoming.sort(key=lambda x: x['datetime'])
         
         return upcoming
     

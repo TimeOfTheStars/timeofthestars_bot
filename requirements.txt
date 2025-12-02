@@ -13,5 +13,9 @@ uvicorn
 # HTTP запросы для API
 requests
 
+# Планировщик задач
+APScheduler
+
 # Дополнительные утилиты
 python-dateutil
+pytz
