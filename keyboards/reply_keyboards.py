@@ -13,7 +13,7 @@ def get_main_menu() -> ReplyKeyboardMarkup:
     keyboard.add(
         KeyboardButton("🏒 Матчи"),
         KeyboardButton("👥 Записать команду в лигу"),
-        KeyboardButton("⛸ Записаться в команду (игрок)")
+        KeyboardButton("👤️ Записаться в команду (игрок)")
     )
     
     return keyboard
@@ -94,6 +94,10 @@ def get_matches_menu(notifications_enabled: bool) -> ReplyKeyboardMarkup:
         keyboard.add(KeyboardButton("🔔 Включить уведомления"))
     
     keyboard.add(KeyboardButton("➡️ Следующие 3 матча"))
+    keyboard.add(
+        KeyboardButton("📊 Турнирная таблица"),
+        KeyboardButton("🏆 Лучшие игроки")
+    )
     keyboard.add(KeyboardButton("🏠 Главное меню"))
     
     return keyboard

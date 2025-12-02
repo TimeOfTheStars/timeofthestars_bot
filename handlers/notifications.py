@@ -104,6 +104,58 @@ def register_notification_handlers(bot: TeleBot):
         finally:
             session.close()
     
+    @bot.message_handler(func=lambda message: message.text == "📊 Турнирная таблица")
+    def show_tournament_table(message: Message):
+        """Отправка ссылки на турнирную таблицу"""
+        user_id = message.from_user.id
+        
+        session = get_session()
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            
+            if not user:
+                bot.send_message(
+                    message.chat.id,
+                    "⚠️ Ошибка: пользователь не найден. Попробуйте /start"
+                )
+                return
+            
+            bot.send_message(
+                message.chat.id,
+                "📊 <b>Турнирная таблица Звезда Отечества</b>\n\n"
+                "<a href='https://timeofthestars.ru/zvezdaOtechestva?tab=table'>Перейти к таблице</a>",
+                parse_mode='HTML',
+                reply_markup=get_matches_menu(user.notifications_enabled)
+            )
+        finally:
+            session.close()
+    
+    @bot.message_handler(func=lambda message: message.text == "🏆 Лучшие игроки")
+    def show_best_players(message: Message):
+        """Отправка ссылки на статистику лучших игроков"""
+        user_id = message.from_user.id
+        
+        session = get_session()
+        try:
+            user = session.query(User).filter_by(telegram_id=user_id).first()
+            
+            if not user:
+                bot.send_message(
+                    message.chat.id,
+                    "⚠️ Ошибка: пользователь не найден. Попробуйте /start"
+                )
+                return
+            
+            bot.send_message(
+                message.chat.id,
+                "🏆 <b>Лучшие игроки Звезда Отечества</b>\n\n"
+                "<a href='https://timeofthestars.ru/zvezdaOtechestva?tab=bestPlayers'>Перейти к статистике</a>",
+                parse_mode='HTML',
+                reply_markup=get_matches_menu(user.notifications_enabled)
+            )
+        finally:
+            session.close()
+    
     @bot.message_handler(func=lambda message: message.text == "➡️ Следующие 3 матча")
     def show_next_matches(message: Message):
         """Показать следующие 3 матча"""
