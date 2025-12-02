@@ -1,4 +1,17 @@
+# Основные зависимости
 pyTelegramBotAPI
-requests
-apscheduler
 python-dotenv
+
+# База данных
+SQLAlchemy
+
+# Админ-панель
+sqladmin
+starlette
+uvicorn
+
+# HTTP запросы для API
+requests
+
+# Дополнительные утилиты
+python-dateutil
