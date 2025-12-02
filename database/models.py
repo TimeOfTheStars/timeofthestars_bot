@@ -4,6 +4,7 @@
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, BigInteger, Boolean, DateTime, Text
 from sqlalchemy.orm import declarative_base
+import hashlib
 
 Base = declarative_base()
 
@@ -82,3 +83,41 @@ class GameNotification(Base):
     
     def __repr__(self):
         return f"<GameNotification game_id={self.game_id} at {self.notified_at}>"
+
+
+class Admin(Base):
+    """Администраторы системы"""
+    __tablename__ = 'admins'
+    
+    id = Column(Integer, primary_key=True)
+    username = Column(String(100), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(255), nullable=True)
+    role = Column(String(50), default='manager')  # admin или manager
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime, nullable=True)
+    
+    def set_password(self, password: str):
+        """Установить пароль (хеширование)"""
+        self.password_hash = hashlib.sha256(password.encode()).hexdigest()
+    
+    def check_password(self, password: str) -> bool:
+        """Проверить пароль"""
+        return self.password_hash == hashlib.sha256(password.encode()).hexdigest()
+    
+    def is_admin(self) -> bool:
+        """Проверка, является ли пользователь администратором с полными правами"""
+        return self.role == 'admin'
+    
+    def is_manager(self) -> bool:
+        """Проверка, является ли пользователь менеджером"""
+        return self.role == 'manager'
+    
+    def __repr__(self):
+        return f"<Admin {self.username} ({self.role})>"
+    
+    def __str__(self):
+        status = '✅' if self.is_active else '❌'
+        role_emoji = '👑' if self.role == 'admin' else '👤'
+        return f"{status} {role_emoji} {self.username} ({self.full_name or 'без имени'})"

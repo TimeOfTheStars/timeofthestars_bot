@@ -2,12 +2,20 @@
 Настройка SQLAdmin панели для управления базой данных
 """
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.sessions import SessionMiddleware
 from sqladmin import Admin, ModelView
-from database.models import User, Player, TeamApplication, GameNotification
-from database.database import engine
+from sqladmin.authentication import AuthenticationBackend
+from starlette.requests import Request
+from database.models import User, Player, TeamApplication, GameNotification, Admin as AdminModel
+from database.database import engine, get_session
 from config import config
 from starlette.responses import HTMLResponse
 from starlette.routing import Route
+from datetime import datetime
+from typing import Optional
+from wtforms import PasswordField, SelectField
+from wtforms.validators import Optional as OptionalValidator
 
 
 class UserAdmin(ModelView, model=User):
@@ -42,6 +50,10 @@ class UserAdmin(ModelView, model=User):
         User.notifications_enabled: 'Уведомления',
         User.created_at: 'Дата регистрации'
     }
+    
+    def is_accessible(self, request: Request) -> bool:
+        """Проверка доступа"""
+        return request.session.get("admin_role") in ["admin", "manager"]
 
 
 class TeamApplicationAdmin(ModelView, model=TeamApplication):
@@ -77,6 +89,10 @@ class TeamApplicationAdmin(ModelView, model=TeamApplication):
         TeamApplication.admin_comment: 'Комментарий админа',
         TeamApplication.created_at: 'Дата заявки'
     }
+    
+    def is_accessible(self, request: Request) -> bool:
+        """Проверка доступа"""
+        return request.session.get("admin_role") in ["admin", "manager"]
 
 
 class PlayerAdmin(ModelView, model=Player):
@@ -113,6 +129,10 @@ class PlayerAdmin(ModelView, model=Player):
         Player.created_at: 'Дата регистрации',
         Player.updated_at: 'Обновлено'
     }
+    
+    def is_accessible(self, request: Request) -> bool:
+        """Проверка доступа"""
+        return request.session.get("admin_role") in ["admin", "manager"]
 
 
 class GameNotificationAdmin(ModelView, model=GameNotification):
@@ -138,6 +158,216 @@ class GameNotificationAdmin(ModelView, model=GameNotification):
         GameNotification.users_count: 'Количество уведомленных',
         GameNotification.notified_at: 'Дата отправки'
     }
+    
+    def is_accessible(self, request: Request) -> bool:
+        """Проверка доступа"""
+        return request.session.get("admin_role") in ["admin", "manager"]
+
+
+class AdminUserAdmin(ModelView, model=AdminModel):
+    """Админка для управления администраторами"""
+    
+    name = "Администратор"
+    name_plural = "Администраторы"
+    icon = "fa-solid fa-user-shield"
+    
+    column_list = [
+        AdminModel.id,
+        AdminModel.username,
+        AdminModel.full_name,
+        AdminModel.role,
+        AdminModel.is_active,
+        AdminModel.last_login,
+        AdminModel.created_at
+    ]
+    
+    column_searchable_list = [AdminModel.username, AdminModel.full_name]
+    column_filters = [AdminModel.is_active, AdminModel.role, AdminModel.created_at]
+    column_default_sort = [(AdminModel.created_at, True)]
+    
+    column_labels = {
+        AdminModel.id: 'ID',
+        AdminModel.username: 'Логин',
+        AdminModel.password_hash: 'Хеш пароля',
+        AdminModel.full_name: 'ФИО',
+        AdminModel.role: 'Роль',
+        AdminModel.is_active: 'Активен',
+        AdminModel.created_at: 'Дата создания',
+        AdminModel.last_login: 'Последний вход'
+    }
+    
+    # Скрываем хеш пароля из деталей
+    column_details_exclude_list = [AdminModel.password_hash]
+    
+    # Только нужные поля для формы (без password_hash и last_login)
+    form_columns = [
+        AdminModel.username,
+        AdminModel.full_name,
+        AdminModel.is_active
+    ]
+    
+    async def scaffold_form(self):
+        """Создание формы с дополнительными полями"""
+        form_class = await super().scaffold_form()
+        
+        # Добавляем поле выбора роли
+        form_class.role = SelectField(
+            'Роль',
+            choices=[
+                ('admin', 'Администратор (полные права)'),
+                ('manager', 'Менеджер (без удаления)')
+            ],
+            default='manager'
+        )
+        
+        # Добавляем поле для смены пароля
+        form_class.new_password = PasswordField(
+            'Новый пароль',
+            validators=[OptionalValidator()],
+            description='Оставьте пустым, чтобы не менять пароль'
+        )
+        
+        return form_class
+    
+    async def on_model_change(self, data: dict, model: AdminModel, is_created: bool, request: Request) -> None:
+        """Вызывается перед сохранением модели"""
+        # При редактировании заполняем текущую роль, если она не пришла из формы
+        if not is_created and 'role' not in data:
+            data['role'] = model.role
+    
+    def _normalize_wtform_data(self, model: AdminModel) -> dict:
+        """Нормализация данных модели для WTForms (добавляем роль)"""
+        data = super()._normalize_wtform_data(model)
+        # Добавляем текущую роль для предзаполнения формы
+        data['role'] = model.role
+        return data
+    
+    async def insert_model(self, request: Request, data: dict) -> Optional[AdminModel]:
+        """Создание нового администратора"""
+        new_password = data.pop('new_password', None)
+        role = data.pop('role', 'manager')  # Извлекаем роль из extra_fields
+        
+        session = get_session()
+        try:
+            admin = AdminModel(**data)
+            admin.role = role  # Устанавливаем роль
+            
+            if new_password:
+                admin.set_password(new_password)
+            else:
+                # Устанавливаем дефолтный пароль, если не указан
+                admin.set_password('password')
+            
+            session.add(admin)
+            session.commit()
+            session.refresh(admin)
+            return admin
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+    
+    async def update_model(self, request: Request, pk: str, data: dict) -> Optional[AdminModel]:
+        """Обновление администратора"""
+        new_password = data.pop('new_password', None)
+        role = data.pop('role', None)  # Извлекаем роль из extra_fields
+        
+        session = get_session()
+        try:
+            admin = session.query(AdminModel).filter(AdminModel.id == pk).first()
+            if not admin:
+                return None
+            
+            # Обновляем поля
+            for key, value in data.items():
+                if hasattr(admin, key):
+                    setattr(admin, key, value)
+            
+            # Обновляем роль, если указана
+            if role:
+                admin.role = role
+            
+            # Если указан новый пароль, меняем его
+            if new_password:
+                admin.set_password(new_password)
+            
+            session.commit()
+            session.refresh(admin)
+            return admin
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+    
+    def is_accessible(self, request: Request) -> bool:
+        """Доступ только для admin"""
+        return request.session.get("admin_role") == "admin"
+
+
+class AdminAuthentication(AuthenticationBackend):
+    """Бэкенд аутентификации для админ-панели"""
+    
+    async def login(self, request: Request) -> bool:
+        """Обработка логина"""
+        form = await request.form()
+        username = form.get("username")
+        password = form.get("password")
+        
+        if not username or not password:
+            return False
+        
+        session = get_session()
+        try:
+            admin = session.query(AdminModel).filter_by(
+                username=username,
+                is_active=True
+            ).first()
+            
+            if admin and admin.check_password(password):
+                # Обновляем время последнего входа
+                admin.last_login = datetime.utcnow()
+                session.commit()
+                
+                # Сохраняем в сессии ID, username и роль
+                request.session.update({
+                    "admin_id": admin.id,
+                    "username": admin.username,
+                    "admin_role": admin.role
+                })
+                return True
+            
+            return False
+        finally:
+            session.close()
+    
+    async def logout(self, request: Request) -> bool:
+        """Обработка выхода"""
+        request.session.clear()
+        return True
+    
+    async def authenticate(self, request: Request) -> bool:
+        """Проверка аутентификации"""
+        admin_id = request.session.get("admin_id")
+        
+        if not admin_id:
+            return False
+        
+        session = get_session()
+        try:
+            admin = session.query(AdminModel).filter_by(
+                id=admin_id,
+                is_active=True
+            ).first()
+            
+            # Обновляем роль в сессии на случай если она изменилась
+            if admin:
+                request.session["admin_role"] = admin.role
+            
+            return admin is not None
+        finally:
+            session.close()
 
 
 def create_admin_app():
@@ -200,18 +430,28 @@ def create_admin_app():
         """
         return HTMLResponse(html)
     
+    # Middleware для сессий
+    middleware = [
+        Middleware(SessionMiddleware, secret_key=config.ADMIN_SECRET_KEY)
+    ]
+    
     app = Starlette(
         routes=[
             Route('/', homepage),
-        ]
+        ],
+        middleware=middleware
     )
     
-    # Создание админ-панели
+    # Создание бэкенда аутентификации
+    authentication_backend = AdminAuthentication(secret_key=config.ADMIN_SECRET_KEY)
+    
+    # Создание админ-панели с аутентификацией
     admin = Admin(
         app,
         engine,
         title="Админ-панель хоккейной лиги",
-        base_url='/admin'
+        base_url='/admin',
+        authentication_backend=authentication_backend
     )
     
     # Регистрация моделей
@@ -219,6 +459,7 @@ def create_admin_app():
     admin.add_view(TeamApplicationAdmin)
     admin.add_view(PlayerAdmin)
     admin.add_view(GameNotificationAdmin)
+    admin.add_view(AdminUserAdmin)
     
     return app
 
