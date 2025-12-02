@@ -19,3 +19,6 @@ APScheduler
 # Дополнительные утилиты
 python-dateutil
 pytz
+
+itsdangerous
+starlette
