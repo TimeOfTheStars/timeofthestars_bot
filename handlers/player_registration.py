@@ -40,7 +40,7 @@ def get_teams_keyboard():
 def register_player_handlers(bot: TeleBot):
     """Регистрация обработчиков для игроков"""
     
-    @bot.message_handler(func=lambda message: message.text == "⛸ Записаться в команду (игрок)")
+    @bot.message_handler(func=lambda message: message.text == "👤️ Записаться в команду (игрок)")
     def start_player_registration(message: Message):
         """Начало регистрации игрока"""
         user_id = message.from_user.id
@@ -548,7 +548,7 @@ def start_new_player_registration(bot: TeleBot, message: Message):
     
     bot.send_message(
         message.chat.id,
-        "⛸ Регистрация игрока\n\n"
+        "👤️ Регистрация игрока\n\n"
         "Введите ваше полное имя (ФИО):",
         reply_markup=ReplyKeyboardRemove()
     )
