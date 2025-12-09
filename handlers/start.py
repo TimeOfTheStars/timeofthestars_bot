@@ -5,6 +5,7 @@ from telebot import TeleBot
 from telebot.types import Message
 from database import get_session, User
 from keyboards.reply_keyboards import get_main_menu
+from utils.metrics import metrics_service
 
 
 def register_start_handlers(bot: TeleBot):
@@ -27,11 +28,27 @@ def register_start_handlers(bot: TeleBot):
                 # Создание нового пользователя
                 user = User(
                     telegram_id=user_id,
+                    username=username,
+                    first_name=first_name,
+                    last_name=last_name,
                     notifications_enabled=False
                 )
                 session.add(user)
+            else:
+                # Обновляем данные существующего пользователя
+                user.username = username
+                user.first_name = first_name
+                user.last_name = last_name
             
             session.commit()
+            
+            # Логируем активность
+            metrics_service.log_activity(
+                telegram_id=user_id,
+                username=username,
+                action='start',
+                details='Команда /start'
+            )
         except Exception as e:
             session.rollback()
             print(f"Ошибка при сохранении пользователя: {e}")
@@ -58,6 +75,9 @@ def register_start_handlers(bot: TeleBot):
     @bot.message_handler(func=lambda message: message.text == "🏠 Главное меню")
     def main_menu(message: Message):
         """Возврат в главное меню"""
+        # Логируем активность
+        metrics_service.track_message(message, 'main_menu')
+        
         text = (
             "🏠 Главное меню\n\n"
             "Выберите нужное действие:"

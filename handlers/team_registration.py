@@ -5,6 +5,7 @@ from telebot import TeleBot
 from telebot.types import Message, ReplyKeyboardRemove
 from database import get_session, TeamApplication
 from keyboards.reply_keyboards import get_back_to_menu, get_team_management_menu, get_confirmation_keyboard
+from utils.metrics import metrics_service
 
 
 # Хранилище состояний регистрации и редактирования команд
@@ -19,6 +20,9 @@ def register_team_handlers(bot: TeleBot):
     def start_team_registration(message: Message):
         """Начало регистрации команды"""
         user_id = message.from_user.id
+        
+        # Логируем активность
+        metrics_service.track_message(message, 'team_registration_start')
         
         # Проверка существующих заявок
         session = get_session()
