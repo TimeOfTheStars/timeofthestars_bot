@@ -7,15 +7,16 @@ from starlette.middleware.sessions import SessionMiddleware
 from sqladmin import Admin, ModelView
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
-from database.models import User, Player, TeamApplication, GameNotification, Admin as AdminModel
+from database.models import User, Player, TeamApplication, GameNotification, Admin as AdminModel, UserActivity
 from database.database import engine, get_session
 from config import config
-from starlette.responses import HTMLResponse
+from starlette.responses import HTMLResponse, Response
 from starlette.routing import Route
 from datetime import datetime
 from typing import Optional
 from wtforms import PasswordField, SelectField
 from wtforms.validators import Optional as OptionalValidator
+from utils.metrics import metrics_service
 
 
 class UserAdmin(ModelView, model=User):
@@ -30,24 +31,33 @@ class UserAdmin(ModelView, model=User):
     column_list = [
         User.id,
         User.telegram_id,
+        User.username,
+        User.first_name,
         User.notifications_enabled,
+        User.total_interactions,
+        User.last_activity,
         User.created_at
     ]
     
     # Колонки для поиска
-    column_searchable_list = [User.telegram_id]
+    column_searchable_list = [User.telegram_id, User.username, User.first_name, User.last_name]
     
     # Фильтры
-    column_filters = [User.notifications_enabled, User.created_at]
+    column_filters = [User.notifications_enabled, User.created_at, User.last_activity]
     
     # Сортировка по умолчанию
-    column_default_sort = [(User.created_at, True)]
+    column_default_sort = [(User.last_activity, True)]
     
     # Форматирование названий колонок
     column_labels = {
         User.id: 'ID',
         User.telegram_id: 'Telegram ID',
+        User.username: 'Username',
+        User.first_name: 'Имя',
+        User.last_name: 'Фамилия',
         User.notifications_enabled: 'Уведомления',
+        User.total_interactions: 'Всего действий',
+        User.last_activity: 'Последняя активность',
         User.created_at: 'Дата регистрации'
     }
     
@@ -306,6 +316,45 @@ class AdminUserAdmin(ModelView, model=AdminModel):
         return request.session.get("admin_role") == "admin"
 
 
+class UserActivityAdmin(ModelView, model=UserActivity):
+    """Админка для логов активности пользователей"""
+    
+    name = "Активность"
+    name_plural = "Логи активности пользователей"
+    icon = "fa-solid fa-chart-line"
+    
+    # Только чтение
+    can_create = False
+    can_edit = False
+    can_delete = False
+    
+    column_list = [
+        UserActivity.id,
+        UserActivity.telegram_id,
+        UserActivity.username,
+        UserActivity.action,
+        UserActivity.details,
+        UserActivity.timestamp
+    ]
+    
+    column_searchable_list = [UserActivity.telegram_id, UserActivity.username, UserActivity.action]
+    column_filters = [UserActivity.action, UserActivity.timestamp]
+    column_default_sort = [(UserActivity.timestamp, True)]
+    
+    column_labels = {
+        UserActivity.id: 'ID',
+        UserActivity.telegram_id: 'Telegram ID',
+        UserActivity.username: 'Username',
+        UserActivity.action: 'Действие',
+        UserActivity.details: 'Детали',
+        UserActivity.timestamp: 'Время'
+    }
+    
+    def is_accessible(self, request: Request) -> bool:
+        """Проверка доступа"""
+        return request.session.get("admin_role") in ["admin", "manager"]
+
+
 class AdminAuthentication(AuthenticationBackend):
     """Бэкенд аутентификации для админ-панели"""
     
@@ -413,6 +462,7 @@ def create_admin_app():
                         border-radius: 5px;
                         font-size: 18px;
                         transition: background 0.3s;
+                        margin: 10px;
                     }
                     a:hover {
                         background: #764ba2;
@@ -424,7 +474,189 @@ def create_admin_app():
                     <h1>🏒 Хоккейная лига Time of the Stars</h1>
                     <p>Административная панель</p>
                     <a href="/admin">Войти в админ-панель</a>
+                    <a href="/metrics">📊 Метрики</a>
                 </div>
+            </body>
+        </html>
+        """
+        return HTMLResponse(html)
+    
+    async def metrics_page(request):
+        """Страница с метриками и статистикой"""
+        # Проверяем аутентификацию
+        if not request.session.get("admin_id"):
+            return Response("Unauthorized", status_code=401)
+        
+        # Собираем метрики
+        total_users = metrics_service.get_total_users()
+        active_7d = metrics_service.get_active_users(7)
+        active_30d = metrics_service.get_active_users(30)
+        new_7d = metrics_service.get_new_users(7)
+        new_30d = metrics_service.get_new_users(30)
+        subscribers = metrics_service.get_subscribers_count()
+        interactions_7d = metrics_service.get_total_interactions(7)
+        interactions_30d = metrics_service.get_total_interactions(30)
+        retention_7d = metrics_service.get_retention_rate(7)
+        retention_30d = metrics_service.get_retention_rate(30)
+        top_actions = metrics_service.get_top_actions(7, 10)
+        
+        # HTML страницы
+        actions_html = "".join([
+            f"<tr><td>{action}</td><td>{count}</td></tr>"
+            for action, count in top_actions
+        ])
+        
+        html = f"""
+        <html>
+            <head>
+                <title>Метрики бота</title>
+                <meta charset="utf-8">
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                        margin: 0;
+                        padding: 20px;
+                        background: #f5f5f5;
+                    }}
+                    .header {{
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        padding: 30px;
+                        border-radius: 10px;
+                        margin-bottom: 30px;
+                    }}
+                    .metrics-grid {{
+                        display: grid;
+                        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                        gap: 20px;
+                        margin-bottom: 30px;
+                    }}
+                    .metric-card {{
+                        background: white;
+                        padding: 25px;
+                        border-radius: 10px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    }}
+                    .metric-value {{
+                        font-size: 36px;
+                        font-weight: bold;
+                        color: #667eea;
+                        margin: 10px 0;
+                    }}
+                    .metric-label {{
+                        color: #666;
+                        font-size: 14px;
+                    }}
+                    .actions-table {{
+                        background: white;
+                        padding: 25px;
+                        border-radius: 10px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    }}
+                    table {{
+                        width: 100%;
+                        border-collapse: collapse;
+                    }}
+                    th, td {{
+                        padding: 12px;
+                        text-align: left;
+                        border-bottom: 1px solid #eee;
+                    }}
+                    th {{
+                        background: #f8f9fa;
+                        font-weight: 600;
+                    }}
+                    .back-link {{
+                        display: inline-block;
+                        padding: 10px 20px;
+                        background: white;
+                        color: #667eea;
+                        text-decoration: none;
+                        border-radius: 5px;
+                        margin-top: 20px;
+                    }}
+                    .back-link:hover {{
+                        background: #f0f0f0;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>📊 Метрики бота хоккейной лиги</h1>
+                    <p>Статистика использования и активности пользователей</p>
+                </div>
+                
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">👥 Всего пользователей</div>
+                        <div class="metric-value">{total_users}</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">🔔 Подписчиков на уведомления</div>
+                        <div class="metric-value">{subscribers}</div>
+                        <div class="metric-label">{round(subscribers/total_users*100 if total_users > 0 else 0, 1)}% от общего числа</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">📈 Активных за 7 дней</div>
+                        <div class="metric-value">{active_7d}</div>
+                        <div class="metric-label">{round(active_7d/total_users*100 if total_users > 0 else 0, 1)}% от общего числа</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">📈 Активных за 30 дней</div>
+                        <div class="metric-value">{active_30d}</div>
+                        <div class="metric-label">{round(active_30d/total_users*100 if total_users > 0 else 0, 1)}% от общего числа</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">🆕 Новых за 7 дней</div>
+                        <div class="metric-value">{new_7d}</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">🆕 Новых за 30 дней</div>
+                        <div class="metric-value">{new_30d}</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">💬 Взаимодействий за 7 дней</div>
+                        <div class="metric-value">{interactions_7d}</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">💬 Взаимодействий за 30 дней</div>
+                        <div class="metric-value">{interactions_30d}</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">🔄 Retention Rate (7д)</div>
+                        <div class="metric-value">{round(retention_7d, 1)}%</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-label">🔄 Retention Rate (30д)</div>
+                        <div class="metric-value">{round(retention_30d, 1)}%</div>
+                    </div>
+                </div>
+                
+                <div class="actions-table">
+                    <h2>🎯 Топ действий за последние 7 дней</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Действие</th>
+                                <th>Количество</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {actions_html}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <a href="/admin" class="back-link">← Вернуться в админ-панель</a>
             </body>
         </html>
         """
@@ -438,6 +670,7 @@ def create_admin_app():
     app = Starlette(
         routes=[
             Route('/', homepage),
+            Route('/metrics', metrics_page),
         ],
         middleware=middleware
     )
@@ -459,6 +692,7 @@ def create_admin_app():
     admin.add_view(TeamApplicationAdmin)
     admin.add_view(PlayerAdmin)
     admin.add_view(GameNotificationAdmin)
+    admin.add_view(UserActivityAdmin)  # Добавляем логи активности
     admin.add_view(AdminUserAdmin)
     
     return app

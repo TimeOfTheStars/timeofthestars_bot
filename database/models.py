@@ -15,8 +15,13 @@ class User(Base):
     
     id = Column(Integer, primary_key=True)
     telegram_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    username = Column(String(255), nullable=True)  # Username Telegram
+    first_name = Column(String(255), nullable=True)  # Имя пользователя
+    last_name = Column(String(255), nullable=True)  # Фамилия пользователя
     notifications_enabled = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    last_activity = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # Последняя активность
+    total_interactions = Column(Integer, default=0)  # Общее количество взаимодействий
     
     def __repr__(self):
         return f"<User {self.telegram_id}>"
@@ -121,3 +126,21 @@ class Admin(Base):
         status = '✅' if self.is_active else '❌'
         role_emoji = '👑' if self.role == 'admin' else '👤'
         return f"{status} {role_emoji} {self.username} ({self.full_name or 'без имени'})"
+
+
+class UserActivity(Base):
+    """Логи активности пользователей для аналитики"""
+    __tablename__ = 'user_activity'
+    
+    id = Column(Integer, primary_key=True)
+    telegram_id = Column(BigInteger, nullable=False, index=True)
+    username = Column(String(255), nullable=True)
+    action = Column(String(100), nullable=False, index=True)  # Тип действия
+    details = Column(Text, nullable=True)  # Дополнительная информация
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    def __repr__(self):
+        return f"<UserActivity {self.telegram_id} - {self.action} at {self.timestamp}>"
+    
+    def __str__(self):
+        return f"{self.telegram_id}: {self.action}"

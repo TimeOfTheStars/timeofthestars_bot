@@ -6,6 +6,7 @@ from telebot.types import Message
 from database import get_session, User
 from keyboards.reply_keyboards import get_back_to_menu, get_matches_menu
 from utils import api_service
+from utils.metrics import metrics_service
 
 
 # Хранилище состояния пагинации для каждого пользователя
@@ -19,6 +20,9 @@ def register_notification_handlers(bot: TeleBot):
     def matches_menu(message: Message):
         """Меню матчей - показываем ближайший матч"""
         user_id = message.from_user.id
+        
+        # Логируем активность
+        metrics_service.track_message(message, 'view_matches')
         
         # Сброс смещения при входе в меню
         user_matches_offset[user_id] = 0
@@ -84,6 +88,10 @@ def register_notification_handlers(bot: TeleBot):
             user.notifications_enabled = not user.notifications_enabled
             session.commit()
             
+            # Логируем активность
+            action = 'enable_notifications' if user.notifications_enabled else 'disable_notifications'
+            metrics_service.track_message(message, action)
+            
             if user.notifications_enabled:
                 response = "✅ Уведомления включены!\n\nВы будете получать уведомления о предстоящих матчах."
             else:
@@ -107,6 +115,8 @@ def register_notification_handlers(bot: TeleBot):
     @bot.message_handler(func=lambda message: message.text == "📊 Турнирная таблица")
     def show_tournament_table(message: Message):
         """Отправка ссылки на турнирную таблицу"""
+        # Логируем активность
+        metrics_service.track_message(message, 'view_table')
         user_id = message.from_user.id
         
         session = get_session()
@@ -135,6 +145,9 @@ def register_notification_handlers(bot: TeleBot):
         """Отправка ссылки на статистику лучших игроков"""
         user_id = message.from_user.id
         
+        # Логируем активность
+        metrics_service.track_message(message, 'view_best_players')
+        
         session = get_session()
         try:
             user = session.query(User).filter_by(telegram_id=user_id).first()
@@ -160,6 +173,9 @@ def register_notification_handlers(bot: TeleBot):
     def show_next_matches(message: Message):
         """Показать следующие 3 матча"""
         user_id = message.from_user.id
+        
+        # Логируем активность
+        metrics_service.track_message(message, 'view_next_matches')
         
         # Получаем текущее смещение
         offset = user_matches_offset.get(user_id, 0)

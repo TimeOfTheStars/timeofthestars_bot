@@ -6,6 +6,7 @@ from telebot.types import Message, ReplyKeyboardRemove, ReplyKeyboardMarkup, Key
 from database import get_session, Player
 from keyboards.reply_keyboards import get_back_to_menu, get_player_management_menu, get_confirmation_keyboard
 from utils import api_service
+from utils.metrics import metrics_service
 
 
 # Хранилище состояний регистрации и редактирования игроков
@@ -44,6 +45,9 @@ def register_player_handlers(bot: TeleBot):
     def start_player_registration(message: Message):
         """Начало регистрации игрока"""
         user_id = message.from_user.id
+        
+        # Логируем активность
+        metrics_service.track_message(message, 'player_registration_start')
         
         # Проверка существующих анкет
         session = get_session()
